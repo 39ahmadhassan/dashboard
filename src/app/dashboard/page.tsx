@@ -1,115 +1,102 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function Dashboard() {
-  const [user, setUser] = useState<any>(null); // store current user profile
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Check auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser: User | null) => {
-      if (!currentUser) {
-        router.push("/login"); // redirect if not logged in
-        return;
-      }
-
-      // Fetch user details from Firestore
-      const docRef = doc(db, "users", currentUser.uid);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        setUser(docSnap.data());
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        try {
+          const res = await fetch(`/api/getUserProfile?uid=${currentUser.uid}`);
+          const data = await res.json();
+          console.log("API response:", data);
+          setUser(data.user);
+        } catch (error) {
+          console.error("Failed to fetch profile:", error);
+        }
       } else {
-        // fallback if Firestore data is missing
-        setUser({
-          name: currentUser.displayName || "No Name",
-          email: currentUser.email,
-          uid: currentUser.uid,
-        });
+        // If user is not logged in, redirect to sign-in page
+        router.push("/sign-in");
       }
-
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [router]);
 
-  if (loading) return <p className="text-center mt-10 text-gray-500">Loading profile...</p>;
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Redirect to sign-in page after logout
+      router.push("/sign-in");
+    } catch (error) {
+      console.error("Logout error:", error);
+      alert("Failed to logout. Try again.");
+    }
+  };
+
+  if (loading)
+    return (
+      <p className="text-center mt-20 text-lg font-medium">
+        Loading profile...
+      </p>
+    );
+
+  if (!user)
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <p className="text-lg font-medium">No profile found.</p>
+        <Button className="mt-4" onClick={handleLogout}>
+          Logout
+        </Button>
+      </div>
+    );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 flex justify-center items-center">
-      <Card className="w-full max-w-md shadow-lg border border-gray-200">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">{user.name}</CardTitle>
-          <CardDescription className="text-gray-500">Your Profile</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <p className="text-gray-700 font-semibold">Email:</p>
-            <p className="text-gray-900">{user.email}</p>
+    <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-white dark:from-gray-900 dark:to-gray-800 flex flex-col items-center py-16 px-4">
+      <div className="w-full max-w-3xl bg-white dark:bg-gray-900 rounded-xl shadow-xl p-8 flex flex-col md:flex-row items-center gap-8">
+        {/* Profile Picture */}
+        <div className="flex-shrink-0">
+          <div className="w-40 h-40 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-4xl font-bold text-white">
+            {user.name ? user.name.charAt(0).toUpperCase() : "U"}
           </div>
-          <div>
-            <p className="text-gray-700 font-semibold">UID:</p>
-            <p className="text-gray-900">{user.uid}</p>
-          </div>
-          {user.role && (
-            <div>
-              <p className="text-gray-700 font-semibold">Role:</p>
-              <p className="text-gray-900">{user.role}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Profile Info */}
+        <div className="flex-1 space-y-4">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            {user.name || "No Name"}
+          </h1>
+
+          <p className="text-gray-600 dark:text-gray-300">
+            <strong>Email:</strong> {user.email || "No Email"}
+          </p>
+
+          <p className="text-gray-600 dark:text-gray-300">
+            <strong>Role:</strong> {user.role || "No Role"}
+          </p>
+
+          <p className="text-gray-600 dark:text-gray-300">
+            <strong>UID:</strong> {user.uid}
+          </p>
+
+          <Button
+            variant="destructive"
+            className="mt-4 w-full md:w-1/2"
+            onClick={handleLogout}
+          >
+            Logout
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// "use client";
-
-// import { collection, onSnapshot } from "firebase/firestore";
-// import { db } from "@/lib/firebase";
-// import { useEffect, useState } from "react";
-
-// export default function Dashboard() {
-//   const [users, setUsers] = useState<any[]>([]);
-
-//   useEffect(() => {
-//     const unsub = onSnapshot(collection(db, "users"), (snap) => {
-//       setUsers(snap.docs.map(d => d.data()));
-//     });
-//     return () => unsub();
-//   }, []);
-
-//   return (
-//     <div className="p-4">
-//       <h1 className="text-xl font-bold mb-2">Users</h1>
-//       {users.map((u) => (
-//         <div key={u.uid} className="border p-2 mb-2 rounded">{u.name} – {u.role}</div>
-//       ))}
-//     </div>
-//   );
-// }
