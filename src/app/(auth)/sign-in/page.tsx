@@ -4,7 +4,11 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { onUserSignIn } from "@/actions/onUserSignIn";
@@ -84,6 +88,34 @@ export default function SignInPage() {
     }
   };
 
+  // ✅ Google Sign-In
+  const handleGoogleSignIn = async () => {
+    if (loading) return;
+    setLoading(true);
+    setErrorMsg("");
+
+    try {
+      const provider = new GoogleAuthProvider();
+      const res = await signInWithPopup(auth, provider);
+
+      // Call server action to ensure profile exists / create if new
+      const serverResult = await onUserSignIn(res.user.uid);
+
+      if (!serverResult.success) {
+        setErrorMsg(serverResult.message || "Failed to fetch profile.");
+        return;
+      }
+
+      // Redirect to dashboard
+      router.push("/dashboard");
+
+    } catch (err: any) {
+      setErrorMsg(err.message || "Google sign-in failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted px-4">
       <Card className="w-full max-w-sm">
@@ -98,7 +130,6 @@ export default function SignInPage() {
             <Alert variant="destructive">
               <AlertDescription className="space-y-3">
                 <p>{errorMsg}</p>
-
                 {userNotFound && (
                   <Button
                     variant="outline"
@@ -145,17 +176,22 @@ export default function SignInPage() {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
+
+          <div className="text-center mt-2">or</div>
+
+          <Button
+            variant="outline"
+            className="w-full mt-2"
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+          >
+            {loading ? "Signing in..." : "Sign in with Google"}
+          </Button>
         </CardContent>
       </Card>
     </div>
   );
 }
-
-
-
-
-
-
 
 
 
@@ -190,6 +226,7 @@ export default function SignInPage() {
 // import { signInWithEmailAndPassword } from "firebase/auth";
 // import { auth } from "@/lib/firebase";
 // import { useRouter } from "next/navigation";
+// import { onUserSignIn } from "@/actions/onUserSignIn";
 
 // // shadcn ui
 // import { Button } from "@/components/ui/button";
@@ -203,12 +240,9 @@ export default function SignInPage() {
 // import { Label } from "@/components/ui/label";
 // import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// // Schema (ONLY email + password)
 // const signInSchema = z.object({
-//   email: z.string().email("Invalid email"),
-//   password: z
-//     .string()
-//     .min(6, "Password must be at least 6 characters"),
+//   email: z.string().email(),
+//   password: z.string().min(6),
 // });
 
 // type SignInFormData = z.infer<typeof signInSchema>;
@@ -236,13 +270,25 @@ export default function SignInPage() {
 //     setErrorMsg("");
 
 //     try {
-//       await signInWithEmailAndPassword(
+//       // 1️⃣ Firebase Auth (client-side)
+//       const res = await signInWithEmailAndPassword(
 //         auth,
 //         data.email,
 //         data.password
 //       );
 
+//       // 2️⃣ Server Action (secure backend validation)
+//       const serverResult = await onUserSignIn(res.user.uid);
+
+//       if (!serverResult.success) {
+//         setUserNotFound(true);
+//         setErrorMsg(serverResult.message || "Profile not found");
+//         return;
+//       }
+
+//       // 3️⃣ Redirect
 //       router.push("/dashboard");
+
 //     } catch (err: any) {
 //       if (err.code === "auth/user-not-found") {
 //         setUserNotFound(true);
@@ -267,13 +313,11 @@ export default function SignInPage() {
 //         </CardHeader>
 
 //         <CardContent className="space-y-4">
-//           {/* Error Message */}
 //           {errorMsg && (
 //             <Alert variant="destructive">
 //               <AlertDescription className="space-y-3">
 //                 <p>{errorMsg}</p>
 
-//                 {/* Show Create Account if user not found */}
 //                 {userNotFound && (
 //                   <Button
 //                     variant="outline"
@@ -287,16 +331,11 @@ export default function SignInPage() {
 //             </Alert>
 //           )}
 
-//           <form
-//             onSubmit={handleSubmit(onSubmit)}
-//             className="space-y-4"
-//           >
-//             {/* Email */}
+//           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 //             <div className="space-y-1">
 //               <Label>Email</Label>
 //               <Input
 //                 type="email"
-//                 placeholder="you@example.com"
 //                 {...register("email")}
 //                 disabled={loading}
 //               />
@@ -307,12 +346,10 @@ export default function SignInPage() {
 //               )}
 //             </div>
 
-//             {/* Password */}
 //             <div className="space-y-1">
 //               <Label>Password</Label>
 //               <Input
 //                 type="password"
-//                 placeholder="••••••••"
 //                 {...register("password")}
 //                 disabled={loading}
 //               />
@@ -323,11 +360,7 @@ export default function SignInPage() {
 //               )}
 //             </div>
 
-//             <Button
-//               type="submit"
-//               className="w-full"
-//               disabled={loading}
-//             >
+//             <Button className="w-full" disabled={loading}>
 //               {loading ? "Signing in..." : "Sign In"}
 //             </Button>
 //           </form>
